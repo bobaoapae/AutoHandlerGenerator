@@ -1,45 +1,38 @@
 ﻿using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 namespace AutoHandlerGenerator
 {
-    [Generator]
-    public class AutoHandlerGenerator : ISourceGenerator
+    public class AutoHandlerGenerator
     {
-        public void Initialize(GeneratorInitializationContext context)
-        {
-            context.RegisterForSyntaxNotifications(() => new SyntaxReceiver());
-        }
-
-        public void Execute(GeneratorExecutionContext context)
+        public static void Generate(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes, SourceProductionContext context)
         {
             var autoSerializerAssembly = Assembly.GetExecutingAssembly();
 
-            if (!(context.SyntaxReceiver is SyntaxReceiver receiver))
+            if (classes.IsDefaultOrEmpty)
             {
+                // nothing to do yet
                 return;
             }
-
+            
+            var distinctClasses = classes.Distinct();
+            
             var candidateClasses = new List<INamedTypeSymbol>();
-
-            var compilation = context.Compilation;
-
-            foreach (var cls in receiver.CandidateClasses)
+            foreach (var cls in distinctClasses)
             {
                 var model = compilation.GetSemanticModel(cls.SyntaxTree);
 
                 var classSymbol = model.GetDeclaredSymbol(cls);
                 candidateClasses.Add(classSymbol);
             }
-
-            if (candidateClasses.Count == 0)
-                return;
 
             var syncServiceServerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.SyncServiceServerAttribute");
             var syncServiceClientBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.SyncServiceClientAttribute");
@@ -105,6 +98,7 @@ namespace AutoHandlerGenerator
                 var serializerAttribute = baseType.GetAttributes().FirstOrDefault(ad => ad.AttributeClass?.Name == serializerBaseAttribute.Name);
 
                 var hashOpcodes = new List<string>();
+                var groups = new List<string>();
 
                 foreach (var subType in subTypes)
                 {
@@ -112,7 +106,7 @@ namespace AutoHandlerGenerator
                     var namespaceName = subType.ContainingNamespace.ToDisplayString();
                     foreach (var member in subType.GetMembers())
                     {
-                        if (!(member is IMethodSymbol methodSymbol))
+                        if (member is not IMethodSymbol methodSymbol)
                             continue;
 
                         var methodName = methodSymbol.Name;
@@ -174,11 +168,11 @@ namespace AutoHandlerGenerator
                                 new DiagnosticDescriptor(
                                     "AG0003",
                                     "Duplicate OpCode found",
-                                    $"Duplicate OpCode found",
+                                    "Duplicate OpCode found ({0} - {1})",
                                     "",
                                     DiagnosticSeverity.Error,
                                     true),
-                                methodSymbol.Locations.First()));
+                                methodSymbol.Locations.First(), handlerGroup, handlerOpcode));
                         }
                         else
                         {
@@ -186,8 +180,12 @@ namespace AutoHandlerGenerator
 
                             var methodSource = string.Format(methodAutoHandlerResource, handlerGroup, handlerOpcode, optionalSessionParameter, methodLogic);
 
-                            initializeHandlers.Append('\t', 3).AppendLine($"if (!_handlers.ContainsKey({handlerGroup}))");
-                            initializeHandlers.Append('\t', 4).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
+                            if (!groups.Contains(handlerGroup))
+                            {
+                                groups.Add(handlerGroup);
+                                initializeHandlers.Append('\t', 3).AppendLine($"if (!_handlers.ContainsKey({handlerGroup}))");
+                                initializeHandlers.Append('\t', 4).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
+                            }
                             initializeHandlers.Append('\t', 3).AppendLine($"_handlers[{handlerGroup}].Add({handlerOpcode}, Internal_Handle{handlerGroup}_{handlerOpcode});");
 
                             methods.Append('\t', 2).AppendLine(methodSource);
@@ -225,7 +223,7 @@ namespace AutoHandlerGenerator
             return result;
         }
 
-        private static string GetResource(Assembly assembly, GeneratorExecutionContext context, string resourceName)
+        private static string GetResource(Assembly assembly, SourceProductionContext context, string resourceName)
         {
             using (var resourceStream = assembly.GetManifestResourceStream(resourceName))
             {

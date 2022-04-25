@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
@@ -62,143 +63,155 @@ namespace AutoHandlerGenerator
             if (autoHandlerClassResource == "" || methodAutoHandlerResource == "")
                 return;
 
-            #region AutoHandler
-
-            var autoHandlerCollections = GetAllClassAndSubTypesWithAttribute(candidateClasses, autoHandlerBaseAttribute);
-
-            foreach (var keyValuePair in autoHandlerCollections)
+            try
             {
-                var baseType = keyValuePair.Key;
-                var subTypes = keyValuePair.Value;
+                var autoHandlerCollections = GetAllClassAndSubTypesWithAttribute(candidateClasses, autoHandlerBaseAttribute);
 
-                var namespaceBase = baseType.ContainingNamespace.ToDisplayString();
-                var collectionName = baseType.Name;
-                var collectionNameCapitalize = collectionName.First().ToString().ToUpper() + collectionName.Substring(1);
-
-                var initializeHandlers = new StringBuilder();
-                var methods = new StringBuilder();
-
-                var autoHandlerInterface = baseType.Interfaces.First(symbol => symbol.Name == interfaceBase.Name || symbol.Name == interfaceGenericBase.Name);
-
-                var isAutoHandlerWithGeneric = autoHandlerInterface.MetadataName == interfaceGenericBase.MetadataName;
-
-
-                var optionalSessionParameter = "";
-                var optionalSessionParameterPassToHandler = "";
-                var optionalSessionParameterPassToTargetMethod = "";
-
-                if (isAutoHandlerWithGeneric)
+                foreach (var keyValuePair in autoHandlerCollections)
                 {
-                    var genericTypeName = autoHandlerInterface.TypeArguments.First().ToString();
-                    optionalSessionParameter = $", {genericTypeName} session";
-                    optionalSessionParameterPassToHandler = ", session";
-                    optionalSessionParameterPassToTargetMethod = "session, ";
-                }
+                    var baseType = keyValuePair.Key;
+                    var subTypes = keyValuePair.Value;
 
-                var serializerAttribute = baseType.GetAttributes().FirstOrDefault(ad => ad.AttributeClass?.Name == serializerBaseAttribute.Name);
+                    var namespaceBase = baseType.ContainingNamespace.ToDisplayString();
+                    var collectionName = baseType.Name;
+                    var collectionNameCapitalize = collectionName.First().ToString().ToUpper() + collectionName.Substring(1);
 
-                var hashOpcodes = new List<string>();
-                var groups = new List<string>();
+                    var initializeHandlers = new StringBuilder();
+                    var methods = new StringBuilder();
 
-                foreach (var subType in subTypes)
-                {
-                    var className = subType.Name;
-                    var namespaceName = subType.ContainingNamespace.ToDisplayString();
-                    foreach (var member in subType.GetMembers())
+                    var autoHandlerInterface = baseType.Interfaces.First(symbol => symbol.Name == interfaceBase.Name || symbol.Name == interfaceGenericBase.Name);
+
+                    var isAutoHandlerWithGeneric = autoHandlerInterface.MetadataName == interfaceGenericBase.MetadataName;
+
+
+                    var optionalSessionParameter = "";
+                    var optionalSessionParameterPassToHandler = "";
+                    var optionalSessionParameterPassToTargetMethod = "";
+
+                    if (isAutoHandlerWithGeneric)
                     {
-                        if (member is not IMethodSymbol methodSymbol)
-                            continue;
+                        var genericTypeName = autoHandlerInterface.TypeArguments.First().ToString();
+                        optionalSessionParameter = $", {genericTypeName} session";
+                        optionalSessionParameterPassToHandler = ", session";
+                        optionalSessionParameterPassToTargetMethod = "session, ";
+                    }
 
-                        var methodName = methodSymbol.Name;
-                        var handlerType = methodSymbol.GetAttributes().FirstOrDefault(data => data.AttributeClass?.Name == handlerBaseAttribute.Name);
+                    var serializerAttribute = baseType.GetAttributes().FirstOrDefault(ad => ad.AttributeClass?.Name == serializerBaseAttribute.Name);
 
-                        if (handlerType == null)
-                            continue;
+                    var hashOpcodes = new List<string>();
+                    var groups = new List<string>();
 
-                        var handlerOpcode = handlerType.ConstructorArguments[0].Value.ToString();
-                        var handlerGroup = handlerType.ConstructorArguments[1].Value.ToString();
-
-                        var methodLogic = new StringBuilder();
-
-                        var targetMethod = $"{namespaceName}.{className}.{methodName}";
-
-                        if (methodSymbol.Parameters.Length > (isAutoHandlerWithGeneric ? 1 : 0))
+                    foreach (var subType in subTypes)
+                    {
+                        var className = subType.Name;
+                        var namespaceName = subType.ContainingNamespace.ToDisplayString();
+                        foreach (var member in subType.GetMembers())
                         {
-                            var methodParameters = new StringBuilder();
+                            if (member is not IMethodSymbol methodSymbol)
+                                continue;
 
-                            foreach (var methodSymbolParameter in methodSymbol.Parameters.Skip(isAutoHandlerWithGeneric ? 1 : 0))
+                            var methodName = methodSymbol.Name;
+                            var handlerType = methodSymbol.GetAttributes().FirstOrDefault(data => data.AttributeClass?.Name == handlerBaseAttribute.Name);
+
+                            if (handlerType == null)
+                                continue;
+
+                            var handlerOpcode = handlerType.ConstructorArguments[0].Value.ToString();
+                            var handlerGroup = handlerType.ConstructorArguments[1].Value.ToString();
+
+                            var methodLogic = new StringBuilder();
+
+                            var targetMethod = $"{namespaceName}.{className}.{methodName}";
+
+                            if (methodSymbol.Parameters.Length > (isAutoHandlerWithGeneric ? 1 : 0))
                             {
-                                var targetType = methodSymbolParameter.Type;
-                                var targetTypeName = $"{targetType.ContainingNamespace}.{targetType.Name}";
+                                var methodParameters = new StringBuilder();
 
-                                if (targetType.Name == "ArraySegment")
+                                foreach (var methodSymbolParameter in methodSymbol.Parameters.Skip(isAutoHandlerWithGeneric ? 1 : 0))
                                 {
-                                    methodParameters.Append(" buffer,");
-                                }
-                                else
-                                {
-                                    if (serializerAttribute != null)
+                                    var targetType = methodSymbolParameter.Type;
+                                    var targetTypeName = $"{targetType.ContainingNamespace}.{targetType.Name}";
+
+                                    if (targetType.Name == "ArraySegment")
                                     {
-                                        methodLogic.Append('\t', 3).AppendLine($"var packet = {serializerAttribute.ConstructorArguments.First().Value}.Deserialize<{targetTypeName}>(buffer);");
+                                        methodParameters.Append(" buffer,");
                                     }
                                     else
                                     {
-                                        methodLogic.Append('\t', 3).AppendLine("var offset = buffer.Offset;");
-                                        methodLogic.Append('\t', 3).AppendLine($"var packet = new {targetTypeName}();");
-                                        methodLogic.Append('\t', 3).AppendLine("packet.Deserialize(buffer, ref offset);");
+                                        if (serializerAttribute != null)
+                                        {
+                                            methodLogic.Append('\t', 3).AppendLine($"var packet = {serializerAttribute.ConstructorArguments.First().Value}.Deserialize<{targetTypeName}>(buffer);");
+                                        }
+                                        else
+                                        {
+                                            methodLogic.Append('\t', 3).AppendLine("var offset = buffer.Offset;");
+                                            methodLogic.Append('\t', 3).AppendLine($"var packet = new {targetTypeName}();");
+                                            methodLogic.Append('\t', 3).AppendLine("packet.Deserialize(buffer, ref offset);");
+                                        }
+
+                                        methodParameters.Append(" packet,");
                                     }
-
-                                    methodParameters.Append(" packet,");
                                 }
+
+                                methodParameters.Length--;
+                                methodLogic.Append('\t', 3).Append($"return {targetMethod}({optionalSessionParameterPassToTargetMethod}{methodParameters});");
                             }
-
-                            methodParameters.Length--;
-                            methodLogic.Append('\t', 3).Append($"return {targetMethod}({optionalSessionParameterPassToTargetMethod}{methodParameters});");
-                        }
-                        else
-                        {
-                            methodLogic.Append('\t', 3).Append($"return {targetMethod}({(optionalSessionParameterPassToTargetMethod.Replace(", ", ""))});");
-                        }
-
-                        var hashOpCode = $"{handlerGroup} - {handlerOpcode}";
-
-                        if (hashOpcodes.Contains(hashOpCode))
-                        {
-                            context.ReportDiagnostic(Diagnostic.Create(
-                                new DiagnosticDescriptor(
-                                    "AG0003",
-                                    "Duplicate OpCode found",
-                                    "Duplicate OpCode found ({0} - {1})",
-                                    "",
-                                    DiagnosticSeverity.Error,
-                                    true),
-                                methodSymbol.Locations.First(), handlerGroup, handlerOpcode));
-                        }
-                        else
-                        {
-                            hashOpcodes.Add(hashOpCode);
-
-                            var methodSource = string.Format(methodAutoHandlerResource, handlerGroup, handlerOpcode, optionalSessionParameter, methodLogic);
-
-                            if (!groups.Contains(handlerGroup))
+                            else
                             {
-                                groups.Add(handlerGroup);
-                                initializeHandlers.Append('\t', 3).AppendLine($"if (!_handlers.ContainsKey({handlerGroup}))");
-                                initializeHandlers.Append('\t', 4).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
+                                methodLogic.Append('\t', 3).Append($"return {targetMethod}({(optionalSessionParameterPassToTargetMethod.Replace(", ", ""))});");
                             }
-                            initializeHandlers.Append('\t', 3).AppendLine($"_handlers[{handlerGroup}].Add({handlerOpcode}, Internal_Handle{handlerGroup}_{handlerOpcode});");
 
-                            methods.Append('\t', 2).AppendLine(methodSource);
+                            var hashOpCode = $"{handlerGroup} - {handlerOpcode}";
+
+                            if (hashOpcodes.Contains(hashOpCode))
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(
+                                    new DiagnosticDescriptor(
+                                        "AG0003",
+                                        "Duplicate OpCode found",
+                                        "Duplicate OpCode found ({0} - {1})",
+                                        "",
+                                        DiagnosticSeverity.Error,
+                                        true),
+                                    methodSymbol.Locations.First(), handlerGroup, handlerOpcode));
+                            }
+                            else
+                            {
+                                hashOpcodes.Add(hashOpCode);
+
+                                var methodSource = string.Format(methodAutoHandlerResource, handlerGroup, handlerOpcode, optionalSessionParameter, methodLogic);
+
+                                if (!groups.Contains(handlerGroup))
+                                {
+                                    groups.Add(handlerGroup);
+                                    initializeHandlers.Append('\t', 3).AppendLine($"if (!_handlers.ContainsKey({handlerGroup}))");
+                                    initializeHandlers.Append('\t', 4).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
+                                }
+                                initializeHandlers.Append('\t', 3).AppendLine($"_handlers[{handlerGroup}].Add({handlerOpcode}, Internal_Handle{handlerGroup}_{handlerOpcode});");
+
+                                methods.Append('\t', 2).AppendLine(methodSource);
+                            }
                         }
                     }
+
+                    var classSource = string.Format(autoHandlerClassResource, namespaceBase, collectionNameCapitalize, initializeHandlers, methods, optionalSessionParameter, optionalSessionParameterPassToHandler);
+
+                    context.AddSource($"{namespaceBase}.{collectionNameCapitalize}.AutoHandler.g.cs", SourceText.From(classSource, Encoding.UTF8));
                 }
-
-                var classSource = string.Format(autoHandlerClassResource, namespaceBase, collectionNameCapitalize, initializeHandlers, methods, optionalSessionParameter, optionalSessionParameterPassToHandler);
-
-                context.AddSource($"{namespaceBase}.{collectionNameCapitalize}.AutoHandler.g.cs", SourceText.From(classSource, Encoding.UTF8));
+            }
+            catch (Exception e)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    new DiagnosticDescriptor(
+                        "AG0004",
+                        "Unexpected Error Occurred",
+                        "Unexpected Error Occurred ({0})",
+                        "",
+                        DiagnosticSeverity.Error,
+                        true),
+                    null, e));
             }
 
-            #endregion
         }
 
         private static Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> GetAllClassAndSubTypesWithAttribute(List<INamedTypeSymbol> candidateClasses, INamedTypeSymbol attribute)

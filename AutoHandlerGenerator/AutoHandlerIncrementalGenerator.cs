@@ -18,8 +18,7 @@ public class AutoHandlerIncrementalGenerator : IIncrementalGenerator
         IncrementalValueProvider<(Compilation, ImmutableArray<ClassDeclarationSyntax>)> compilationAndClassesServer
             = context.CompilationProvider.Combine(classDeclarationsServer.Collect());
 
-        context.RegisterSourceOutput(compilationAndClassesServer,
-            static (spc, source) => AutoHandlerGenerator.Generate(source.Item1, source.Item2, spc));
+        context.RegisterSourceOutput(compilationAndClassesServer, static (spc, source) => AutoHandlerGenerator.Generate(source.Item1, source.Item2, spc));
     }
 
     private static bool IsSyntaxTargetForGeneration(SyntaxNode node)

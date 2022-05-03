@@ -16,7 +16,7 @@ namespace AutoHandlerGenerator
     {
         public static void Generate(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes, SourceProductionContext context)
         {
-            var autoSerializerAssembly = Assembly.GetExecutingAssembly();
+            var autoHandlerAssembly = Assembly.GetExecutingAssembly();
 
             if (classes.IsDefaultOrEmpty)
             {
@@ -57,8 +57,8 @@ namespace AutoHandlerGenerator
                 return;
             }
 
-            var autoHandlerClassResource = GetResource(autoSerializerAssembly, context, "AutoHandlerGenerator.Resources.AutoHandler.cs");
-            var methodAutoHandlerResource = GetResource(autoSerializerAssembly, context, "AutoHandlerGenerator.Resources.MethodAutoHandler.cs");
+            var autoHandlerClassResource = GetResource(autoHandlerAssembly, context, "AutoHandlerGenerator.Resources.AutoHandler.cs");
+            var methodAutoHandlerResource = GetResource(autoHandlerAssembly, context, "AutoHandlerGenerator.Resources.MethodAutoHandler.cs");
 
             if (autoHandlerClassResource == "" || methodAutoHandlerResource == "")
                 return;
@@ -114,6 +114,9 @@ namespace AutoHandlerGenerator
                             var handlerType = methodSymbol.GetAttributes().FirstOrDefault(data => data.AttributeClass?.Name == handlerBaseAttribute.Name);
 
                             if (handlerType == null)
+                                continue;
+
+                            if (handlerType.ConstructorArguments.Length < 2)
                                 continue;
 
                             var handlerOpcode = handlerType.ConstructorArguments[0].Value.ToString();
@@ -184,8 +187,7 @@ namespace AutoHandlerGenerator
                                 if (!groups.Contains(handlerGroup))
                                 {
                                     groups.Add(handlerGroup);
-                                    initializeHandlers.Append('\t', 3).AppendLine($"if (!_handlers.ContainsKey({handlerGroup}))");
-                                    initializeHandlers.Append('\t', 4).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
+                                    initializeHandlers.Append('\t', 3).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
                                 }
                                 initializeHandlers.Append('\t', 3).AppendLine($"_handlers[{handlerGroup}].Add({handlerOpcode}, Internal_Handle{handlerGroup}_{handlerOpcode});");
 
@@ -196,7 +198,7 @@ namespace AutoHandlerGenerator
 
                     var classSource = string.Format(autoHandlerClassResource, namespaceBase, collectionNameCapitalize, initializeHandlers, methods, optionalSessionParameter, optionalSessionParameterPassToHandler);
 
-                    context.AddSource($"{namespaceBase}.{collectionNameCapitalize}.AutoHandler.g.cs", SourceText.From(classSource, Encoding.UTF8));
+                    context.AddSource($"{namespaceBase}.{collectionNameCapitalize}.g.cs", SourceText.From(classSource, Encoding.UTF8));
                 }
             }
             catch (Exception e)

@@ -57,8 +57,8 @@ namespace AutoHandlerGenerator
                 return;
             }
 
-            var autoHandlerClassResource = GetResource(autoHandlerAssembly, context, "AutoHandlerGenerator.Resources.AutoHandler.cs");
-            var methodAutoHandlerResource = GetResource(autoHandlerAssembly, context, "AutoHandlerGenerator.Resources.MethodAutoHandler.cs");
+            var autoHandlerClassResource = GetResource(autoHandlerAssembly, context, "AutoHandlerGenerator.Resources.AutoHandler.g");
+            var methodAutoHandlerResource = GetResource(autoHandlerAssembly, context, "AutoHandlerGenerator.Resources.MethodAutoHandler.g");
 
             if (autoHandlerClassResource == "" || methodAutoHandlerResource == "")
                 return;

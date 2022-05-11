@@ -6,34 +6,15 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
 namespace AutoHandlerGenerator
 {
     public class AutoHandlerGenerator
     {
-        public static void Generate(Compilation compilation, ImmutableArray<ClassDeclarationSyntax> classes, SourceProductionContext context)
+        public static void Generate(Compilation compilation, ImmutableArray<INamedTypeSymbol> classes, SourceProductionContext context)
         {
             var autoHandlerAssembly = Assembly.GetExecutingAssembly();
-
-            if (classes.IsDefaultOrEmpty)
-            {
-                // nothing to do yet
-                return;
-            }
-            
-            var distinctClasses = classes.Distinct();
-            
-            var candidateClasses = new List<INamedTypeSymbol>();
-            foreach (var cls in distinctClasses)
-            {
-                var model = compilation.GetSemanticModel(cls.SyntaxTree);
-
-                var classSymbol = model.GetDeclaredSymbol(cls);
-                candidateClasses.Add(classSymbol);
-            }
 
             var syncServiceServerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.SyncServiceServerAttribute");
             var syncServiceClientBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.SyncServiceClientAttribute");
@@ -65,7 +46,7 @@ namespace AutoHandlerGenerator
 
             try
             {
-                var autoHandlerCollections = GetAllClassAndSubTypesWithAttribute(candidateClasses, autoHandlerBaseAttribute);
+                var autoHandlerCollections = GetAllClassAndSubTypesWithAttribute(classes, autoHandlerBaseAttribute);
 
                 foreach (var keyValuePair in autoHandlerCollections)
                 {
@@ -216,7 +197,7 @@ namespace AutoHandlerGenerator
 
         }
 
-        private static Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> GetAllClassAndSubTypesWithAttribute(List<INamedTypeSymbol> candidateClasses, INamedTypeSymbol attribute)
+        private static Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> GetAllClassAndSubTypesWithAttribute(ImmutableArray<INamedTypeSymbol> candidateClasses, INamedTypeSymbol attribute)
         {
             var result = new Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>>(SymbolEqualityComparer.Default);
             foreach (var classSymbol in candidateClasses)
@@ -256,16 +237,6 @@ namespace AutoHandlerGenerator
                     null));
                 return "";
             }
-        }
-
-        private static string Capitalize(string source)
-        {
-            return source.First().ToString().ToUpper() + source.Substring(1);
-        }
-
-        private static string DeCapitalize(string source)
-        {
-            return source.First().ToString().ToLower() + source.Substring(1);
         }
     }
 }

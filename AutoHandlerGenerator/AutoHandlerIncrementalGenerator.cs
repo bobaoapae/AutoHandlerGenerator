@@ -1,22 +1,19 @@
-﻿using System.Collections.Immutable;
-using Microsoft.CodeAnalysis;
+﻿using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace AutoHandlerGenerator;
 
-[Generator]
+[Generator(LanguageNames.CSharp)]
 public class AutoHandlerIncrementalGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        IncrementalValuesProvider<ClassDeclarationSyntax> classDeclarationsServer = context.SyntaxProvider
-            .CreateSyntaxProvider(
+        var classDeclarationsServer = context.SyntaxProvider.CreateSyntaxProvider(
                 predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
                 transform: static (ctx, _) => GetSemanticTargetForGenerationSerialize(ctx))
-            .Where(static m => m is not null);
+            .Where(static (s) => IsNamedTargetForGeneration(s));
 
-        IncrementalValueProvider<(Compilation, ImmutableArray<ClassDeclarationSyntax>)> compilationAndClassesServer
-            = context.CompilationProvider.Combine(classDeclarationsServer.Collect());
+        var compilationAndClassesServer = context.CompilationProvider.Combine(classDeclarationsServer.Collect());
 
         context.RegisterSourceOutput(compilationAndClassesServer, static (spc, source) => AutoHandlerGenerator.Generate(source.Item1, source.Item2, spc));
     }
@@ -26,22 +23,17 @@ public class AutoHandlerIncrementalGenerator : IIncrementalGenerator
         return node is ClassDeclarationSyntax;
     }
 
-    private static ClassDeclarationSyntax GetSemanticTargetForGenerationSerialize(GeneratorSyntaxContext context)
+    private static bool IsNamedTargetForGeneration(INamedTypeSymbol node)
     {
-        var attributeSymbol = context.SemanticModel.Compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.AutoHandlerAttribute")!;
+        return SourceGeneratorUtils.CheckClassOrBaseHasAttribute(node, "AutoHandlerAttribute");
+    }
 
+    private static INamedTypeSymbol GetSemanticTargetForGenerationSerialize(GeneratorSyntaxContext context)
+    {
         var classDeclarationSyntax = (ClassDeclarationSyntax) context.Node;
 
         var model = context.SemanticModel.GetDeclaredSymbol(classDeclarationSyntax);
 
-        if (model is INamedTypeSymbol namedTypeSymbol)
-        {
-            if (SourceGeneratorUtils.CheckClassOrBaseHasAttribute(namedTypeSymbol, attributeSymbol))
-            {
-                return classDeclarationSyntax;
-            }
-        }
-
-        return null;
+        return (INamedTypeSymbol) model;
     }
 }

@@ -19,7 +19,7 @@ namespace AutoHandlerGenerator
             var syncServiceServerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.SyncServiceServerAttribute");
             var syncServiceClientBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.SyncServiceClientAttribute");
             var autoHandlerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.AutoHandlerAttribute");
-            var serializerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.AutoHandlerSerializerAttribute");
+            var serializerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.AutoHandlerDeserializerAttribute`1");
             var handlerBaseAttribute = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.HandlerAttribute");
             var interfaceBase = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.IAutoHandler");
             var interfaceGenericBase = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.IAutoHandler`1");
@@ -124,7 +124,7 @@ namespace AutoHandlerGenerator
                                     {
                                         if (serializerAttribute != null)
                                         {
-                                            methodLogic.Append('\t', 3).AppendLine($"var packet = {serializerAttribute.ConstructorArguments.First().Value}.Deserialize<{targetTypeName}>(buffer);");
+                                            methodLogic.Append('\t', 3).AppendLine($"var packet = {serializerAttribute.AttributeClass.TypeArguments[0]}.Deserialize<{targetTypeName}>(buffer);");
                                         }
                                         else
                                         {

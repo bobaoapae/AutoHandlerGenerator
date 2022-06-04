@@ -3,6 +3,7 @@
 namespace AutoHandlerGenerator.Sample;
 
 [AutoHandler]
-public partial  class AutoHandlerExample : IAutoHandler
+[AutoHandlerDeserializer<CustomDeserializer>]
+public partial class AutoHandlerExample : IAutoHandler
 {
 }

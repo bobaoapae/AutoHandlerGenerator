@@ -18,7 +18,6 @@ jobs:
       with:
         dotnet-version: 7.0.x
         include-prerelease: true
-        source-url: https://nuget.pkg.github.com/project-nevareth/index.json
       env:
         NUGET_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN }}
     - name: Add GitHub Packages Source

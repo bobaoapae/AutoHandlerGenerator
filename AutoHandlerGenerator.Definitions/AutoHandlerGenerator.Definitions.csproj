@@ -5,8 +5,7 @@
         <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
         <RepositoryUrl>https://github.com/project-nevareth/AutoHandlerGenerator</RepositoryUrl>
         <PackageProjectUrl>https://github.com/project-nevareth/AutoHandlerGenerator</PackageProjectUrl>
-        <Version>1.0.4</Version>
-        <LangVersion>preview</LangVersion>
+        <Version>1.0.5</Version>
     </PropertyGroup>
 
     <ItemGroup>

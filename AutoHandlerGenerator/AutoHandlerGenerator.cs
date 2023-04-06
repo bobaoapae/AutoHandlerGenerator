@@ -24,8 +24,7 @@ namespace AutoHandlerGenerator
             var interfaceBase = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.IAutoHandler");
             var interfaceGenericBase = compilation.GetTypeByMetadataName("AutoHandlerGenerator.Definitions.IAutoHandler`1");
 
-            if (syncServiceServerBaseAttribute == null || syncServiceClientBaseAttribute == null || autoHandlerBaseAttribute == null || serializerBaseAttribute == null || handlerBaseAttribute == null || interfaceBase == null ||
-                interfaceGenericBase == null)
+            if (syncServiceServerBaseAttribute == null || syncServiceClientBaseAttribute == null || autoHandlerBaseAttribute == null || serializerBaseAttribute == null || handlerBaseAttribute == null || interfaceBase == null || interfaceGenericBase == null)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     new DiagnosticDescriptor(
@@ -112,7 +111,6 @@ namespace AutoHandlerGenerator
                             {
                                 var methodParameters = new StringBuilder();
 
-                                var hasPacket = false;
                                 foreach (var methodSymbolParameter in methodSymbol.Parameters.Skip(isAutoHandlerWithGeneric ? 1 : 0))
                                 {
                                     var targetType = methodSymbolParameter.Type;
@@ -124,15 +122,14 @@ namespace AutoHandlerGenerator
                                     }
                                     else
                                     {
-                                        hasPacket = true;
                                         if (serializerAttribute != null)
                                         {
-                                            methodLogic.Append('\t', 3).AppendLine($"var packet = {serializerAttribute.AttributeClass.TypeArguments[0]}.Deserialize<{targetTypeName}>({targetTypeName}.Create(), buffer);");
+                                            methodLogic.Append('\t', 3).AppendLine($"var packet = {serializerAttribute.AttributeClass.TypeArguments[0]}.Deserialize<{targetTypeName}>(buffer);");
                                         }
                                         else
                                         {
                                             methodLogic.Append('\t', 3).AppendLine("var offset = buffer.Offset;");
-                                            methodLogic.Append('\t', 3).AppendLine($"var packet = {targetTypeName}.Create();");
+                                            methodLogic.Append('\t', 3).AppendLine($"var packet = new {targetTypeName}();");
                                             methodLogic.Append('\t', 3).AppendLine("packet.Deserialize(buffer, ref offset);");
                                         }
 
@@ -141,13 +138,11 @@ namespace AutoHandlerGenerator
                                 }
 
                                 methodParameters.Length--;
-                                methodLogic.Append('\t', 3).Append($"await {targetMethod}({optionalSessionParameterPassToTargetMethod}{methodParameters});").AppendLine();
-                                if (hasPacket)
-                                    methodLogic.Append('\t', 3).Append("packet.Dispose();");
+                                methodLogic.Append('\t', 3).Append($"return {targetMethod}({optionalSessionParameterPassToTargetMethod}{methodParameters});");
                             }
                             else
                             {
-                                methodLogic.Append('\t', 3).Append($"await {targetMethod}({(optionalSessionParameterPassToTargetMethod.Replace(", ", ""))});");
+                                methodLogic.Append('\t', 3).Append($"return {targetMethod}({(optionalSessionParameterPassToTargetMethod.Replace(", ", ""))});");
                             }
 
                             var hashOpCode = $"{handlerGroup} - {handlerOpcode}";
@@ -175,7 +170,6 @@ namespace AutoHandlerGenerator
                                     groups.Add(handlerGroup);
                                     initializeHandlers.Append('\t', 3).AppendLine($"_handlers.Add({handlerGroup}, new Dictionary<int, InternalHandle>());");
                                 }
-
                                 initializeHandlers.Append('\t', 3).AppendLine($"_handlers[{handlerGroup}].Add({handlerOpcode}, Internal_Handle{handlerGroup}_{handlerOpcode});");
 
                                 methods.Append('\t', 2).AppendLine(methodSource);
@@ -200,6 +194,7 @@ namespace AutoHandlerGenerator
                         true),
                     null, e));
             }
+
         }
 
         private static Dictionary<INamedTypeSymbol, List<INamedTypeSymbol>> GetAllClassAndSubTypesWithAttribute(ImmutableArray<INamedTypeSymbol> candidateClasses, INamedTypeSymbol attribute)
